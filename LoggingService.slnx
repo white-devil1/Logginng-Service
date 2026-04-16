@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="LoggingService.API/LoggingService.API.csproj" />
+  <Project Path="LoggingService.Application/LoggingService.Application.csproj" />
+  <Project Path="LoggingService.Domain/LoggingService.Domain.csproj" />
+  <Project Path="LoggingService.Infrastructure/LoggingService.Infrastructure.csproj" />
+</Solution>
