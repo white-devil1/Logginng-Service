@@ -15,7 +15,7 @@ public class LoginAuditService : ILoginAuditService
         LoginEventType? eventType, string? userId, string? email,
         Guid? tenantId, Guid? branchId, string? ipAddress,
         DateTime? fromDate, DateTime? toDate,
-        int page, int pageSize, string sortOrder, CancellationToken ct = default)
+        int page, int pageSize, string sortOrder, string? sortBy = null, CancellationToken ct = default)
     {
         var q = _db.LoginAudits.AsQueryable();
         if (eventType.HasValue) q = q.Where(l => l.EventType == eventType.Value);
@@ -26,19 +26,124 @@ public class LoginAuditService : ILoginAuditService
         if (!string.IsNullOrEmpty(ipAddress)) q = q.Where(l => l.IpAddress == ipAddress);
         if (fromDate.HasValue) q = q.Where(l => l.Timestamp >= fromDate.Value);
         if (toDate.HasValue) q = q.Where(l => l.Timestamp <= toDate.Value);
+        
         var total = await q.CountAsync(ct);
-        q = sortOrder.ToLower() == "asc"
-            ? q.OrderBy(l => l.Timestamp)
-            : q.OrderByDescending(l => l.Timestamp);
-        var logs = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new LoginAuditListResponse
-        { Logs = logs.Select(Map).ToList(), TotalCount = total, Page = page, PageSize = pageSize };
+        
+        // Apply database sorting for Timestamp
+        if (string.IsNullOrEmpty(sortBy) || sortBy.Equals("Timestamp", StringComparison.OrdinalIgnoreCase))
+        {
+            q = sortOrder.ToLower() == "asc"
+                ? q.OrderBy(l => l.Timestamp)
+                : q.OrderByDescending(l => l.Timestamp);
+            
+            var logs = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            var enrichedLogs = await EnrichWithUserNames(logs, ct);
+            return new LoginAuditListResponse
+            { Logs = enrichedLogs, TotalCount = total, Page = page, PageSize = pageSize };
+        }
+        // Apply in-memory sorting for UserName
+        else if (sortBy.Equals("UserName", StringComparison.OrdinalIgnoreCase))
+        {
+            var logs = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            var enrichedLogs = await EnrichWithUserNames(logs, ct);
+            
+            var sortedLogs = sortOrder.ToLower() == "asc"
+                ? enrichedLogs.OrderBy(l => l.FullName).ToList()
+                : enrichedLogs.OrderByDescending(l => l.FullName).ToList();
+            
+            return new LoginAuditListResponse
+            { Logs = sortedLogs, TotalCount = total, Page = page, PageSize = pageSize };
+        }
+        else
+        {
+            // Default to Timestamp sorting
+            q = sortOrder.ToLower() == "asc"
+                ? q.OrderBy(l => l.Timestamp)
+                : q.OrderByDescending(l => l.Timestamp);
+            
+            var logs = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            var enrichedLogs = await EnrichWithUserNames(logs, ct);
+            return new LoginAuditListResponse
+            { Logs = enrichedLogs, TotalCount = total, Page = page, PageSize = pageSize };
+        }
+    }
+
+    private async Task<List<LoginAuditResponse>> EnrichWithUserNames(List<LoginAudit> logs, CancellationToken ct)
+    {
+        if (logs.Count == 0) return new List<LoginAuditResponse>();
+        
+        // Collect unique user IDs
+        var userIds = logs.Where(l => !string.IsNullOrEmpty(l.UserId))
+                          .Select(l => l.UserId!)
+                          .Distinct()
+                          .ToList();
+        
+        if (userIds.Count == 0)
+        {
+            return logs.Select(Map).ToList();
+        }
+        
+        // Fetch user details from UserSync table
+        var users = await _db.UserSyncs
+            .Where(u => userIds.Contains(u.UserId))
+            .ToListAsync(ct);
+        
+        var userDict = users.ToDictionary(u => u.UserId, u => u, StringComparer.OrdinalIgnoreCase);
+        
+        // Map with enrichment
+        return logs.Select(l =>
+        {
+            var response = Map(l);
+            if (!string.IsNullOrEmpty(l.UserId) && userDict.TryGetValue(l.UserId, out var user))
+            {
+                response.FirstName = user.FirstName;
+                response.LastName = user.LastName;
+                response.FullName = $"{user.FirstName ?? ""} {user.LastName ?? ""}".Trim();
+                if (string.IsNullOrEmpty(response.FullName))
+                {
+                    response.FullName = user.UserName ?? "Unknown User";
+                }
+            }
+            else
+            {
+                response.FullName = "Unknown User";
+            }
+            return response;
+        }).ToList();
     }
 
     public async Task<LoginAuditResponse?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var l = await _db.LoginAudits.FirstOrDefaultAsync(x => x.Id == id, ct);
-        return l == null ? null : Map(l);
+        if (l == null) return null;
+        
+        var response = Map(l);
+        
+        // Enrich single record with user name
+        if (!string.IsNullOrEmpty(l.UserId))
+        {
+            var user = await _db.UserSyncs.FirstOrDefaultAsync(u => u.UserId == l.UserId, ct);
+            if (user != null)
+            {
+                response.FirstName = user.FirstName;
+                response.LastName = user.LastName;
+                response.FullName = $"{user.FirstName ?? ""} {user.LastName ?? ""}".Trim();
+                if (string.IsNullOrEmpty(response.FullName))
+                {
+                    response.FullName = user.UserName ?? "Unknown User";
+                }
+            }
+            else
+            {
+                response.FullName = "Unknown User";
+            }
+        }
+        else
+        {
+            response.FullName = "Unknown User";
+        }
+        
+        return response;
     }
 
     public async Task<SummaryResponse> GetSummaryAsync(
