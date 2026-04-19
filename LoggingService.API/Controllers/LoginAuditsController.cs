@@ -26,7 +26,7 @@ public class LoginAuditsController : ControllerBase
         [FromQuery] Guid? branchId, [FromQuery] string? ipAddress,
         [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
-        [FromQuery] string sortOrder = "desc")
+        [FromQuery] string sortOrder = "desc", [FromQuery] string? sortBy = null)
     {
         if (!IsSuperAdmin()) { tenantId = TenantId(); branchId = BranchId(); }
         var result = await _mediator.Send(new ListLoginAuditsCommand
@@ -41,7 +41,8 @@ public class LoginAuditsController : ControllerBase
             ToDate = toDate,
             Page = page,
             PageSize = pageSize,
-            SortOrder = sortOrder
+            SortOrder = sortOrder,
+            SortBy = sortBy
         });
         return Ok(ApiResponse<LoginAuditListResponse>.Ok(
             result, "Login audits retrieved"));

@@ -8,7 +8,7 @@ public interface ILoginAuditService
         LoginEventType? eventType, string? userId, string? email,
         Guid? tenantId, Guid? branchId, string? ipAddress,
         DateTime? fromDate, DateTime? toDate,
-        int page, int pageSize, string sortOrder, CancellationToken ct = default);
+        int page, int pageSize, string sortOrder, string? sortBy = null, CancellationToken ct = default);
     Task<LoginAuditResponse?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<SummaryResponse> GetSummaryAsync(
         Guid? tenantId, Guid? branchId, bool isSuperAdmin, CancellationToken ct = default);

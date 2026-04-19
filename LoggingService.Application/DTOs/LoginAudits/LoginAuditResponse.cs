@@ -8,6 +8,9 @@ public class LoginAuditResponse
     public LoginEventType EventType { get; set; }
     public string? UserId { get; set; }
     public string Email { get; set; } = default!;
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? FullName { get; set; }
     public Guid? TenantId { get; set; }
     public Guid? BranchId { get; set; }
     public string? IpAddress { get; set; }

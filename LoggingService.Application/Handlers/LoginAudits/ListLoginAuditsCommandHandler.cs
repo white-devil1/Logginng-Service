@@ -11,5 +11,5 @@ public class ListLoginAuditsCommandHandler : IRequestHandler<ListLoginAuditsComm
     public async Task<LoginAuditListResponse> Handle(ListLoginAuditsCommand r, CancellationToken ct)
         => await _svc.GetLogsAsync(r.EventType, r.UserId, r.Email,
               r.TenantId, r.BranchId, r.IpAddress, r.FromDate, r.ToDate,
-              r.Page, r.PageSize, r.SortOrder, ct);
+              r.Page, r.PageSize, r.SortOrder, r.SortBy, ct);
 }
