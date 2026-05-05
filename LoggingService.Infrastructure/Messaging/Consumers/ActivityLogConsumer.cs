@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -36,7 +37,8 @@ public class ActivityLogConsumer : IDisposable
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var dto = JsonSerializer.Deserialize<ActivityLogEventDto>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true,
+                        Converters = { new JsonStringEnumConverter(), new NumberOrStringConverter() } });
                 if (dto == null) return;
 
                 using var scope = _scopeFactory.CreateScope();
@@ -92,4 +94,30 @@ public class ActivityLogEventDto
     public Guid? BranchId { get; set; }
     public string? IpAddress { get; set; }
     public string? CorrelationId { get; set; }
+}
+
+/// <summary>
+/// Handles fields declared as string in the DTO but published as a JSON number by other services.
+/// Accepts both token types — numbers are converted to their string representation.
+/// </summary>
+public class NumberOrStringConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var l) ? l.ToString() : reader.GetDouble().ToString(),
+            JsonTokenType.True   => "true",
+            JsonTokenType.False  => "false",
+            JsonTokenType.Null   => null,
+            _ => throw new JsonException($"Cannot convert token type '{reader.TokenType}' to string.")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+    {
+        if (value is null) writer.WriteNullValue();
+        else writer.WriteStringValue(value);
+    }
 }

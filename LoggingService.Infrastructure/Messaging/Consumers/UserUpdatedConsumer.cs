@@ -1,4 +1,3 @@
-
 using LoggingService.Application.Services;
 using LoggingService.Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +6,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace LoggingService.Infrastructure.Messaging.Consumers;
 
@@ -38,7 +38,8 @@ public class UserUpdatedConsumer : IDisposable
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var evt = JsonSerializer.Deserialize<UserUpdatedEventDto>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true,
+                        Converters = { new JsonStringEnumConverter() } });
                 if (evt == null) return;
                 using var scope = _scopeFactory.CreateScope();
                 var svc = scope.ServiceProvider.GetRequiredService<IUserSyncService>();
@@ -72,6 +73,7 @@ public class UserUpdatedConsumer : IDisposable
     }
     public void Dispose() => _channel?.Dispose();
 }
+
 public class UserUpdatedEventDto
 {
     public string UserId { get; set; } = default!;

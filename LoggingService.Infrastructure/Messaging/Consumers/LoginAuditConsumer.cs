@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -36,7 +37,8 @@ public class LoginAuditConsumer : IDisposable
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var dto = JsonSerializer.Deserialize<LoginAuditEventDto>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true,
+                        Converters = { new JsonStringEnumConverter() } });
                 if (dto == null) return;
 
                 using var scope = _scopeFactory.CreateScope();

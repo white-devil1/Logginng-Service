@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -36,7 +37,8 @@ public class ErrorLogConsumer : IDisposable
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var dto = JsonSerializer.Deserialize<ErrorLogEventDto>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true,
+                        Converters = { new JsonStringEnumConverter() } });
                 if (dto == null) return;
 
                 using var scope = _scopeFactory.CreateScope();
@@ -59,6 +61,7 @@ public class ErrorLogConsumer : IDisposable
                     UserEmail = dto.UserEmail,
                     TenantId = dto.TenantId,
                     BranchId = dto.BranchId,
+                    CorrelationId = dto.CorrelationId,
                     IpAddress = dto.IpAddress,
                     UserAgent = dto.UserAgent,
                     AdditionalData = dto.AdditionalData,
@@ -96,6 +99,7 @@ public class ErrorLogEventDto
     public string? UserEmail { get; set; }
     public Guid? TenantId { get; set; }
     public Guid? BranchId { get; set; }
+    public string? CorrelationId { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public string? AdditionalData { get; set; }
